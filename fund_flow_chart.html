@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>板块资金流向实时监控</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #1a1a2e;
+    color: #eee;
+    font-family: "Microsoft YaHei", sans-serif;
+    padding: 16px;
+  }
+  .header {
+    text-align: center;
+    margin-bottom: 16px;
+  }
+  .header h1 {
+    font-size: 28px;
+    background: linear-gradient(90deg, #ffd700, #ff6b6b);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .header .date { color: #888; font-size: 13px; margin-top: 4px; }
+
+  .cards {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+  .card {
+    background: #16213e;
+    border-radius: 10px;
+    padding: 12px 24px;
+    text-align: center;
+    min-width: 130px;
+    border: 1px solid #0f3460;
+  }
+  .card .label { font-size: 13px; color: #aaa; margin-bottom: 6px; }
+  .card .bar {
+    height: 4px;
+    border-radius: 2px;
+    margin: 6px 0;
+    background: #333;
+    overflow: hidden;
+  }
+  .card .bar .fill { height: 100%; border-radius: 2px; }
+  .card .value { font-size: 20px; font-weight: bold; }
+  .red { color: #ff4757; }
+  .green { color: #2ed573; }
+
+  .rank-panel {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .rank-box {
+    flex: 1;
+    background: #16213e;
+    border-radius: 10px;
+    padding: 14px 18px;
+    border: 1px solid #0f3460;
+  }
+  .rank-box .rank-title {
+    font-size: 14px;
+    font-weight: bold;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #0f3460;
+  }
+  .rank-box.inflow .rank-title { color: #ff4757; }
+  .rank-box.outflow .rank-title { color: #2ed573; }
+  .rank-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 0;
+    font-size: 13px;
+  }
+  .rank-item .name { color: #ccc; }
+  .rank-item .val { font-weight: bold; }
+  .rank-item .num {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    line-height: 20px;
+    text-align: center;
+    border-radius: 4px;
+    font-size: 11px;
+    margin-right: 8px;
+  }
+  .inflow .num { background: rgba(255,71,87,0.2); color: #ff4757; }
+  .outflow .num { background: rgba(46,213,115,0.2); color: #2ed573; }
+
+  .mode-switch {
+    display: flex;
+    gap: 0;
+    margin-bottom: 12px;
+    justify-content: center;
+  }
+  .mode-btn {
+    padding: 8px 28px;
+    background: #16213e;
+    border: 1px solid #0f3460;
+    color: #888;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: bold;
+    transition: all 0.2s;
+  }
+  .mode-btn:first-child { border-radius: 8px 0 0 8px; }
+  .mode-btn:last-child { border-radius: 0 8px 8px 0; }
+  .mode-btn.active.top {
+    background: rgba(255,71,87,0.15);
+    color: #ff4757;
+    border-color: #ff4757;
+  }
+  .mode-btn.active.low {
+    background: rgba(46,213,115,0.15);
+    color: #2ed573;
+    border-color: #2ed573;
+  }
+  .mode-btn:hover { color: #ccc; }
+
+  .watch-box {
+    background: #16213e;
+    border: 1px solid #0f3460;
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 12px;
+  }
+  .watch-title {
+    font-size: 13px;
+    color: #aaa;
+    margin-bottom: 8px;
+  }
+  .watch-input-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .watch-input-row input {
+    flex: 1;
+    background: #0f3460;
+    border: 1px solid #1a4a7a;
+    border-radius: 6px;
+    padding: 6px 12px;
+    color: #eee;
+    font-size: 13px;
+    outline: none;
+  }
+  .watch-input-row input:focus { border-color: #ffd700; }
+  .watch-input-row button {
+    background: #ffd700;
+    color: #1a1a2e;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 18px;
+    font-size: 13px;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  .watch-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .watch-tag {
+    background: rgba(255,215,0,0.15);
+    border: 1px solid #ffd700;
+    color: #ffd700;
+    padding: 3px 10px;
+    border-radius: 14px;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .watch-tag .del {
+    cursor: pointer;
+    font-weight: bold;
+    opacity: 0.7;
+  }
+  .watch-tag .del:hover { opacity: 1; }
+  .watch-empty { color: #555; font-size: 12px; }
+
+  #chart {
+    width: 100%;
+    height: calc(100vh - 480px);
+    min-height: 420px;
+    background: #16213e;
+    border-radius: 12px;
+    padding: 10px;
+  }
+  .tip { text-align:center; color:#666; font-size:12px; margin-top:8px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>板块资金流向实时监控</h1>
+  <div class="date" id="dateText">加载中...</div>
+</div>
+
+<div class="cards" id="cards"></div>
+
+<div class="rank-panel">
+  <div class="rank-box inflow">
+    <div class="rank-title">▲ 概念板块主力净流入 TOP5</div>
+    <div id="rankInflow"></div>
+  </div>
+  <div class="rank-box outflow">
+    <div class="rank-title">▼ 概念板块主力净流出 TOP5</div>
+    <div id="rankOutflow"></div>
+  </div>
+</div>
+
+<div class="mode-switch">
+  <button class="mode-btn top active" id="btnToday" onclick="switchRange('today')">📅 今日实时</button>
+  <button class="mode-btn low" id="btn5day" onclick="switchRange('5day')">📈 近5日连续</button>
+</div>
+
+<div class="mode-switch" style="margin-top:-8px">
+  <button class="mode-btn top active" id="btnTop20" onclick="switchMode('top')">▲ 流入 TOP20</button>
+  <button class="mode-btn low" id="btnLow20" onclick="switchMode('low')">▼ 流出 TOP20</button>
+</div>
+
+<div class="watch-box">
+  <div class="watch-title">★ 自选板块（强制监控，不受TOP20/LOW20切换影响）</div>
+  <div class="watch-input-row">
+    <input type="text" id="watchInput" placeholder="输入板块名称关键词，如：CPO、半导体、机器人..." onkeydown="if(event.key==='Enter')addWatch()">
+    <button onclick="addWatch()">添加</button>
+  </div>
+  <div class="watch-tags" id="watchTags"></div>
+</div>
+
+<div id="chart"></div>
+<div class="tip">每 15 秒自动刷新 · 数据来源：东方财富 · 不作为买卖依据</div>
+
+<script>
+const chart = echarts.init(document.getElementById('chart'), 'dark');
+let refreshTimer = null;
+let chartMode = 'top';
+let rangeMode = 'today';
+let lastData = null;
+let watchList = JSON.parse(localStorage.getItem('bkzj_watch') || '[]');
+
+function colorFor(v) { return v >= 0 ? '#ff4757' : '#2ed573'; }
+
+function saveWatch() {
+  localStorage.setItem('bkzj_watch', JSON.stringify(watchList));
+}
+
+function renderWatchTags() {
+  const el = document.getElementById('watchTags');
+  if (watchList.length === 0) {
+    el.innerHTML = '<span class="watch-empty">暂无自选板块，输入关键词添加</span>';
+    return;
+  }
+  el.innerHTML = watchList.map((kw, i) => `
+    <span class="watch-tag">${kw}<span class="del" onclick="removeWatch(${i})">×</span></span>
+  `).join('');
+}
+
+function addWatch() {
+  const input = document.getElementById('watchInput');
+  const kw = input.value.trim();
+  if (!kw) return;
+  if (!watchList.includes(kw)) {
+    watchList.push(kw);
+    saveWatch();
+    renderWatchTags();
+    if (lastData) renderChart(lastData);
+  }
+  input.value = '';
+}
+
+function removeWatch(idx) {
+  watchList.splice(idx, 1);
+  saveWatch();
+  renderWatchTags();
+  if (lastData) renderChart(lastData);
+}
+
+function switchMode(mode) {
+  chartMode = mode;
+  document.getElementById('btnTop20').classList.toggle('active', mode === 'top');
+  document.getElementById('btnLow20').classList.toggle('active', mode === 'low');
+  if (lastData) renderChart(lastData);
+}
+
+function switchRange(range) {
+  rangeMode = range;
+  document.getElementById('btnToday').classList.toggle('active', range === 'today');
+  document.getElementById('btn5day').classList.toggle('active', range === '5day');
+  loadData();
+}
+
+function renderCards(marketTotal) {
+  const cardsEl = document.getElementById('cards');
+  if (!marketTotal || marketTotal.length === 0) {
+    cardsEl.innerHTML = '<div class="card">暂无大盘数据</div>';
+    return;
+  }
+  const latest = marketTotal[marketTotal.length - 1];
+  const items = [
+    { label: '主力', val: latest['主力'] },
+    { label: '超大单', val: latest['超大单'] },
+    { label: '大单', val: latest['大单'] },
+    { label: '中单', val: latest['中单'] },
+    { label: '小单', val: latest['小单'] },
+  ];
+  cardsEl.innerHTML = items.map(it => {
+    const cls = it.val >= 0 ? 'red' : 'green';
+    const sign = it.val >= 0 ? '+' : '';
+    return `
+      <div class="card">
+        <div class="label">${it.label}</div>
+        <div class="value ${cls}">${sign}${it.val?.toFixed(2) ?? '--'}亿</div>
+        <div class="bar"><div class="fill" style="width:${Math.min(100, Math.abs(it.val||0)/3)}%;background:${colorFor(it.val)}"></div></div>
+      </div>`;
+  }).join('');
+}
+
+function renderRank(boards) {
+  const boardNames = Object.keys(boards);
+  const latest = boardNames.map(name => {
+    const arr = boards[name]['主力'];
+    return { name, val: arr[arr.length - 1] || 0 };
+  });
+  const inflow = latest.filter(x => x.val > 0).sort((a, b) => b.val - a.val).slice(0, 5);
+  const outflow = latest.filter(x => x.val < 0).sort((a, b) => a.val - b.val).slice(0, 5);
+
+  document.getElementById('rankInflow').innerHTML = inflow.length
+    ? inflow.map((x, i) => `
+        <div class="rank-item">
+          <span><span class="num">${i+1}</span><span class="name">${x.name}</span></span>
+          <span class="val red">+${x.val.toFixed(2)}亿</span>
+        </div>`).join('')
+    : '<div class="rank-item"><span class="name">暂无流入板块</span></div>';
+
+  document.getElementById('rankOutflow').innerHTML = outflow.length
+    ? outflow.map((x, i) => `
+        <div class="rank-item">
+          <span><span class="num">${i+1}</span><span class="name">${x.name}</span></span>
+          <span class="val green">${x.val.toFixed(2)}亿</span>
+        </div>`).join('')
+    : '<div class="rank-item"><span class="name">暂无流出板块</span></div>';
+}
+
+function renderChart(data) {
+  lastData = data;
+  const { timestamps, boards } = data;
+  const dateStr = rangeMode === '5day'
+    ? `近5日连续（${data.dates ? data.dates[0] : ''} ~ ${data.dates ? data.dates[data.dates.length-1] : ''}）`
+    : data.date;
+  document.getElementById('dateText').textContent = `${dateStr} · 共 ${timestamps.length} 个时间点`;
+
+  renderRank(boards);
+
+  const boardNames = Object.keys(boards);
+  const all = boardNames.map(name => {
+    const arr = boards[name]['主力'];
+    return { name, last: arr[arr.length - 1] || 0, arr };
+  });
+
+  let selected;
+  if (chartMode === 'top') {
+    selected = all.filter(x => x.last >= 0).sort((a, b) => b.last - a.last).slice(0, 20);
+  } else {
+    selected = all.filter(x => x.last < 0).sort((a, b) => a.last - b.last).slice(0, 20);
+  }
+
+  const watchMatched = all.filter(x => {
+    const nameLower = x.name.toLowerCase();
+    return watchList.some(kw => nameLower.includes(kw.toLowerCase()));
+  });
+  const existingNames = new Set(selected.map(x => x.name));
+  const watchOnly = watchMatched.filter(x => !existingNames.has(x.name));
+  selected = [...selected, ...watchOnly];
+
+  const series = selected.map(b => {
+    const lastVal = b.last;
+    const isWatch = watchMatched.some(w => w.name === b.name);
+    let color = colorFor(lastVal);
+    let lineWidth = Math.abs(lastVal) > 50 ? 2.5 : 1.2;
+    if (isWatch) {
+      color = '#ffd700';
+      lineWidth = 3.5;
+    }
+    return {
+      name: b.name + (isWatch ? ' ★' : ''),
+      type: 'line',
+      data: b.arr,
+      smooth: true,
+      symbol: 'none',
+      lineStyle: { width: lineWidth, color: color },
+      endLabel: {
+        show: true,
+        formatter: (p) => `${p.seriesName} ${p.value?.toFixed(1)}`,
+        color: color,
+        fontSize: isWatch ? 12 : 11,
+        fontWeight: isWatch ? 'bold' : 'normal',
+      },
+      emphasis: { focus: 'series', lineStyle: { width: lineWidth + 1 } },
+    };
+  });
+
+  const option = {
+    backgroundColor: 'transparent',
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: 'rgba(20,30,60,0.95)',
+      borderColor: '#0f3460',
+      textStyle: { color: '#eee', fontSize: 12 },
+    },
+    legend: {
+      show: true,
+      textStyle: { color: '#aaa', fontSize: 11 },
+      type: 'scroll',
+      bottom: 0,
+    },
+    grid: { left: 60, right: 180, top: 30, bottom: 50 },
+    xAxis: {
+      type: 'category',
+      data: timestamps,
+      axisLine: { lineStyle: { color: '#444' } },
+      axisLabel: { color: '#888', fontSize: 11 },
+    },
+    yAxis: {
+      type: 'value',
+      name: '亿元',
+      nameTextStyle: { color: '#888' },
+      axisLine: { show: true, lineStyle: { color: '#444' } },
+      splitLine: { lineStyle: { color: '#222' } },
+      axisLabel: {
+        color: '#888',
+        formatter: (v) => v + '亿'
+      },
+    },
+    series: series,
+    animationDuration: 500,
+  };
+
+  chart.setOption(option, true);
+}
+
+async function loadData() {
+  try {
+    const fileName = rangeMode === '5day' ? 'chart_data_5d.json' : 'fund_flow_data.json';
+    const resp = await fetch(fileName + '?t=' + Date.now());
+    if (!resp.ok) throw new Error('数据文件未找到: ' + fileName);
+    const data = await resp.json();
+    if (data.timestamps && data.timestamps.length > 0) {
+      renderCards(data.market_total);
+      renderChart(data);
+    } else {
+      document.getElementById('dateText').textContent = '等待数据采集...请先运行 fetch_fund_flow.py';
+    }
+  } catch (e) {
+    document.getElementById('dateText').textContent = rangeMode === '5day'
+      ? '暂无5日数据（需要至少1天以上历史数据，收盘后自动生成）'
+      : '加载失败: ' + e.message;
+  }
+}
+
+window.addEventListener('resize', () => chart.resize());
+renderWatchTags();
+loadData();
+refreshTimer = setInterval(loadData, 15000);
+</script>
+
+</body>
+</html>
